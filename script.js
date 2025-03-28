@@ -19,6 +19,15 @@ document.addEventListener('DOMContentLoaded', function() {
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const themeOptionsContainer = document.getElementById('themeOptionsContainer');
     
+    // New elements for added features
+    const noteCategory = document.getElementById('noteCategory');
+    const addCategoryBtn = document.getElementById('addCategoryBtn');
+    const newNoteTags = document.getElementById('newNoteTags');
+    const editNoteTags = document.getElementById('editNoteTags');
+    const pinNoteBtn = document.getElementById('pinNoteBtn');
+    const pinEditNoteBtn = document.getElementById('pinEditNoteBtn');
+    const filterButtons = document.querySelectorAll('.filter-btn');
+    
     // Image upload elements
     const imageUploadBtn = document.getElementById('imageUploadBtn');
     const imageInput = document.getElementById('imageInput');
@@ -41,7 +50,9 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentSortMethod = 'newest';
     let voiceRecognition = null;
     let isRecording = false;
-    let isSaving = false; // Flag to prevent multiple saves
+    let isSaving = false;
+    let currentFilter = 'all';
+    let categories = JSON.parse(localStorage.getItem('categories')) || ['general', 'work', 'personal', 'ideas'];
     
     // Initialize the app
     initApp();
@@ -51,77 +62,185 @@ document.addEventListener('DOMContentLoaded', function() {
         setupEventListeners();
         applyTheme(localStorage.getItem('theme') || 'light');
         setupVoiceRecognition();
+        updateCategoryDropdown();
     }
     
     function setupEventListeners() {
         // Add new note button
         addNoteBtn.addEventListener('click', openNewNoteEditor);
-        addNoteBtn.addEventListener('touchend', handleTouchEvent(openNewNoteEditor));
         
-        // Save buttons with enhanced mobile handling
+        // Save buttons
         saveNoteBtn.addEventListener('click', handleSaveNote);
-        saveNoteBtn.addEventListener('touchend', handleTouchEvent(handleSaveNote));
-        
         saveEditNoteBtn.addEventListener('click', handleSaveEditNote);
-        saveEditNoteBtn.addEventListener('touchend', handleTouchEvent(handleSaveEditNote));
         
         // Cancel buttons
         cancelNoteBtn.addEventListener('click', closeNewNoteEditor);
-        cancelNoteBtn.addEventListener('touchend', handleTouchEvent(closeNewNoteEditor));
-        
         cancelEditNoteBtn.addEventListener('click', closeEditNoteEditor);
-        cancelEditNoteBtn.addEventListener('touchend', handleTouchEvent(closeEditNoteEditor));
         
         // Image upload for new note
         imageUploadBtn.addEventListener('click', () => imageInput.click());
-        imageUploadBtn.addEventListener('touchend', handleTouchEvent(() => imageInput.click()));
         imageInput.addEventListener('change', handleImageUpload);
         removeImageBtn.addEventListener('click', removeImage);
-        removeImageBtn.addEventListener('touchend', handleTouchEvent(removeImage));
         
         // Image upload for edit note
         editImageUploadBtn.addEventListener('click', () => editImageInput.click());
-        editImageUploadBtn.addEventListener('touchend', handleTouchEvent(() => editImageInput.click()));
         editImageInput.addEventListener('change', handleEditImageUpload);
         removeEditImageBtn.addEventListener('click', removeEditImage);
-        removeEditImageBtn.addEventListener('touchend', handleTouchEvent(removeEditImage));
         
         // Voice note functionality
         voiceNoteBtn.addEventListener('click', toggleVoiceRecording);
-        voiceNoteBtn.addEventListener('touchend', handleTouchEvent(toggleVoiceRecording));
         
         // Search functionality
         searchInput.addEventListener('input', searchNotes);
         clearSearchBtn.addEventListener('click', clearSearch);
-        clearSearchBtn.addEventListener('touchend', handleTouchEvent(clearSearch));
         
         // Sort functionality
         sortBtn.addEventListener('click', toggleSortMethod);
-        sortBtn.addEventListener('touchend', handleTouchEvent(toggleSortMethod));
         
         // Theme toggle
         themeToggleBtn.addEventListener('click', toggleThemeOptions);
-        themeToggleBtn.addEventListener('touchend', handleTouchEvent(toggleThemeOptions));
+        
+        // Theme selection
+        document.querySelectorAll('.theme-option').forEach(option => {
+            option.addEventListener('click', function() {
+                const theme = this.getAttribute('data-theme');
+                applyTheme(theme);
+                localStorage.setItem('theme', theme);
+                themeOptionsContainer.classList.remove('show');
+            });
+        });
         
         // Format buttons
         document.querySelectorAll('.format-btn').forEach(button => {
             button.addEventListener('click', handleFormatButton);
-            button.addEventListener('touchend', handleTouchEvent(handleFormatButton));
+        });
+        
+        // New feature event listeners
+        pinNoteBtn.addEventListener('click', togglePinNewNote);
+        pinEditNoteBtn.addEventListener('click', togglePinEditNote);
+        
+        newNoteTags.addEventListener('keydown', handleTagInput);
+        editNoteTags.addEventListener('keydown', handleTagInput);
+        
+        addCategoryBtn.addEventListener('click', addNewCategory);
+        
+        // Filter buttons
+        filterButtons.forEach(button => {
+            button.addEventListener('click', function() {
+                filterNotes(this.getAttribute('data-filter'));
+            });
+        });
+        
+        // Word count updates
+        newNoteContent.addEventListener('input', updateWordCount);
+        editNoteContent.addEventListener('input', updateWordCount);
+    }
+    
+    function togglePinNewNote() {
+        pinNoteBtn.classList.toggle('active');
+    }
+    
+    function togglePinEditNote() {
+        pinEditNoteBtn.classList.toggle('active');
+    }
+    
+    function handleTagInput(e) {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            const tagsInput = e.target;
+            const tagsContainer = tagsInput.nextElementSibling;
+            const tagText = tagsInput.value.trim();
+            
+            if (tagText && tagText !== ',') {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.innerHTML = `
+                    ${tagText.replace(',', '')}
+                    <span class="tag-remove">&times;</span>
+                `;
+                
+                tag.querySelector('.tag-remove').addEventListener('click', function() {
+                    tag.remove();
+                });
+                
+                tagsContainer.appendChild(tag);
+                tagsInput.value = '';
+            }
+        }
+    }
+    
+    function getTagsFromContainer(container) {
+        return Array.from(container.querySelectorAll('.tag')).map(tag => 
+            tag.textContent.replace('×', '').trim()
+        );
+    }
+    
+    function addNewCategory() {
+        const categoryName = prompt('Enter new category name:');
+        if (categoryName && !categories.includes(categoryName.toLowerCase())) {
+            categories.push(categoryName.toLowerCase());
+            localStorage.setItem('categories', JSON.stringify(categories));
+            updateCategoryDropdown();
+            showToast(`Category "${categoryName}" added`);
+        } else if (categoryName) {
+            showToast('Category already exists');
+        }
+    }
+    
+    function updateCategoryDropdown() {
+        noteCategory.innerHTML = '';
+        categories.forEach(category => {
+            const option = document.createElement('option');
+            option.value = category;
+            option.textContent = category.charAt(0).toUpperCase() + category.slice(1);
+            noteCategory.appendChild(option);
         });
     }
     
-    // Special touch event handler for mobile devices
-    function handleTouchEvent(handler) {
-        return function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            handler(e);
-        };
+    function filterNotes(filter) {
+        currentFilter = filter;
+        
+        // Update active filter button
+        filterButtons.forEach(btn => btn.classList.remove('active'));
+        document.querySelector(`.filter-btn[data-filter="${filter}"]`).classList.add('active');
+        
+        let filteredNotes = notes;
+        
+        switch(filter) {
+            case 'pinned':
+                filteredNotes = notes.filter(note => note.pinned);
+                break;
+            case 'work':
+            case 'personal':
+                filteredNotes = notes.filter(note => note.category === filter);
+                break;
+            case 'archived':
+                filteredNotes = notes.filter(note => note.archived);
+                break;
+            default:
+                filteredNotes = notes.filter(note => !note.archived);
+        }
+        
+        renderNotes(filteredNotes);
+    }
+    
+    function updateWordCount() {
+        const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
+        const wordCountDisplay = activeEditor.closest('.note-editor-container').querySelector('.word-count');
+        
+        const text = activeEditor.textContent || '';
+        const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+        wordCountDisplay.textContent = `${wordCount} words`;
     }
     
     function toggleThemeOptions(e) {
         if (e) e.preventDefault();
         themeOptionsContainer.classList.toggle('show');
+    }
+    
+    function applyTheme(theme) {
+        document.documentElement.setAttribute('data-theme', theme);
+        localStorage.setItem('theme', theme);
     }
     
     function handleFormatButton(e) {
@@ -227,17 +346,6 @@ document.addEventListener('DOMContentLoaded', function() {
             isRecording = true;
             voiceNoteBtn.innerHTML = '<i class="fas fa-microphone-slash"></i> Stop Recording';
             voiceNoteBtn.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
-            
-            // Add recording indicator
-            const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
-            const recordingIndicator = document.createElement('div');
-            recordingIndicator.className = 'voice-recording';
-            recordingIndicator.innerHTML = `
-                <div class="recording-dot"></div>
-                <span>Recording...</span>
-            `;
-            activeEditor.parentNode.insertBefore(recordingIndicator, activeEditor.nextSibling);
-            
             showToast('Voice recording started');
         } catch (e) {
             console.error('Error starting voice recognition', e);
@@ -251,11 +359,6 @@ document.addEventListener('DOMContentLoaded', function() {
             isRecording = false;
             voiceNoteBtn.innerHTML = '<i class="fas fa-microphone"></i> Voice Note';
             voiceNoteBtn.style.backgroundColor = '';
-            
-            // Remove recording indicator
-            const recordingIndicator = document.querySelector('.voice-recording');
-            if (recordingIndicator) recordingIndicator.remove();
-            
             showToast('Voice recording stopped');
         }
     }
@@ -272,8 +375,10 @@ document.addEventListener('DOMContentLoaded', function() {
         removeImageBtn.style.display = 'none';
         imagePreview.src = '';
         imageInput.value = '';
+        pinNoteBtn.classList.remove('active');
+        newNoteTags.value = '';
+        newNoteTags.nextElementSibling.innerHTML = '';
         
-        // Improved mobile focus handling
         setTimeout(() => {
             newNoteTitle.focus();
             window.scrollTo(0, 0);
@@ -309,6 +414,32 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         editImageInput.value = '';
         
+        // Handle pinned status
+        if (note.pinned) {
+            pinEditNoteBtn.classList.add('active');
+        } else {
+            pinEditNoteBtn.classList.remove('active');
+        }
+        
+        // Handle tags
+        editNoteTags.value = '';
+        const tagsContainer = editNoteTags.nextElementSibling;
+        tagsContainer.innerHTML = '';
+        if (note.tags && note.tags.length > 0) {
+            note.tags.forEach(tagText => {
+                const tag = document.createElement('span');
+                tag.className = 'tag';
+                tag.innerHTML = `
+                    ${tagText}
+                    <span class="tag-remove">&times;</span>
+                `;
+                tag.querySelector('.tag-remove').addEventListener('click', function() {
+                    tag.remove();
+                });
+                tagsContainer.appendChild(tag);
+            });
+        }
+        
         // Hide new note container if open
         closeNewNoteEditor();
         
@@ -316,7 +447,6 @@ document.addEventListener('DOMContentLoaded', function() {
         editNoteContainer.classList.add('active');
         createOverlay();
         
-        // Improved mobile focus handling
         setTimeout(() => {
             editNoteTitle.focus();
             window.scrollTo(0, 0);
@@ -336,11 +466,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const overlay = document.createElement('div');
         overlay.className = 'overlay active';
         overlay.addEventListener('click', (e) => {
-            e.preventDefault();
-            closeNewNoteEditor();
-            closeEditNoteEditor();
-        });
-        overlay.addEventListener('touchend', (e) => {
             e.preventDefault();
             closeNewNoteEditor();
             closeEditNoteEditor();
@@ -400,12 +525,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function saveNewNote() {
         const title = newNoteTitle.value.trim() || `Note ${notes.length + 1}`;
         const content = newNoteContent.innerHTML.trim() || '<p>Click to edit this note...</p>';
+        const tags = getTagsFromContainer(newNoteTags.nextElementSibling);
         
         const newNote = {
             id: noteCounter++,
             title: title,
             content: content,
             image: currentImageDataUrl,
+            category: noteCategory.value,
+            tags: tags,
+            pinned: pinNoteBtn.classList.contains('active'),
+            archived: false,
             timestamp: new Date().toISOString(),
             lastEdited: new Date().toISOString()
         };
@@ -422,12 +552,15 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const title = editNoteTitle.value.trim() || `Note ${notes.length + 1}`;
         const content = editNoteContent.innerHTML.trim() || '<p>Click to edit this note...</p>';
+        const tags = getTagsFromContainer(editNoteTags.nextElementSibling);
         
         const noteIndex = notes.findIndex(n => n.id === currentlyEditingId);
         if (noteIndex !== -1) {
             notes[noteIndex].title = title;
             notes[noteIndex].content = content;
             notes[noteIndex].lastEdited = new Date().toISOString();
+            notes[noteIndex].tags = tags;
+            notes[noteIndex].pinned = pinEditNoteBtn.classList.contains('active');
             
             // Only update image if a new one was selected or removed
             if (currentEditImageDataUrl !== undefined) {
@@ -476,7 +609,8 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const filteredNotes = notes.filter(note => 
             note.title.toLowerCase().includes(searchTerm) || 
-            (note.content && note.content.toLowerCase().includes(searchTerm))
+            (note.content && note.content.toLowerCase().includes(searchTerm)) ||
+            (note.tags && note.tags.some(tag => tag.toLowerCase().includes(searchTerm)))
         );
         
         renderNotes(filteredNotes);
@@ -516,7 +650,9 @@ document.addEventListener('DOMContentLoaded', function() {
             noNotesMsg.className = 'no-notes-message';
             noNotesMsg.textContent = searchInput.value.trim() ? 
                 'No notes match your search.' : 
-                'No notes found. Click the + button to add a new note.';
+                currentFilter === 'all' ? 
+                    'No notes found. Click the + button to add a new note.' :
+                    `No ${currentFilter} notes found.`;
             notesList.appendChild(noNotesMsg);
             return;
         }
@@ -526,9 +662,20 @@ document.addEventListener('DOMContentLoaded', function() {
             noteElement.className = 'note';
             noteElement.setAttribute('data-id', note.id);
             
+            if (note.pinned) {
+                noteElement.classList.add('pinned');
+            }
+            
             let imageHtml = '';
             if (note.image) {
                 imageHtml = `<img src="${note.image}" class="note-image" alt="Note image">`;
+            }
+            
+            let tagsHtml = '';
+            if (note.tags && note.tags.length > 0) {
+                tagsHtml = `<div class="note-tags">${note.tags.map(tag => 
+                    `<span class="tag">${tag}</span>`
+                ).join('')}</div>`;
             }
             
             const date = new Date(note.timestamp);
@@ -544,20 +691,25 @@ document.addEventListener('DOMContentLoaded', function() {
                 : '';
             
             noteElement.innerHTML = `
+                ${note.pinned ? '<div class="pin-indicator"><i class="fas fa-thumbtack"></i></div>' : ''}
                 <div class="note-title">${note.title}</div>
                 ${imageHtml}
                 <div class="note-content">${contentPreview}</div>
-                <div class="note-date">${formattedDate}</div>
+                ${tagsHtml}
+                <div class="note-meta">
+                    <span class="note-date">${formattedDate}</span>
+                    <span class="note-category">${note.category || 'general'}</span>
+                </div>
                 <button class="delete-note" data-id="${note.id}"><i class="fas fa-trash"></i></button>
+                <button class="archive-note" data-id="${note.id}" title="${note.archived ? 'Unarchive' : 'Archive'}">
+                    <i class="fas fa-${note.archived ? 'inbox' : 'archive'}"></i>
+                </button>
             `;
             
             notesList.appendChild(noteElement);
             
-            // Add click event to edit note - improved for mobile
+            // Add click event to edit note
             noteElement.addEventListener('click', function(e) {
-                handleNoteClick(e, note.id);
-            });
-            noteElement.addEventListener('touchend', function(e) {
                 handleNoteClick(e, note.id);
             });
             
@@ -568,10 +720,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 e.stopPropagation();
                 deleteNote(note.id, e);
             });
-            deleteBtn.addEventListener('touchend', function(e) {
+            
+            // Add archive button event
+            const archiveBtn = noteElement.querySelector('.archive-note');
+            archiveBtn.addEventListener('click', function(e) {
                 e.preventDefault();
                 e.stopPropagation();
-                deleteNote(note.id, e);
+                toggleArchiveNote(note.id, e);
             });
         });
     }
@@ -581,16 +736,29 @@ document.addEventListener('DOMContentLoaded', function() {
         const isDeleteBtn = e.target.classList.contains('delete-note') || 
                           e.target.classList.contains('fa-trash') ||
                           e.target.closest('.delete-note');
+        const isArchiveBtn = e.target.classList.contains('archive-note') || 
+                           e.target.classList.contains('fa-archive') ||
+                           e.target.classList.contains('fa-inbox') ||
+                           e.target.closest('.archive-note');
         const isImage = e.target.classList.contains('note-image');
         
-        if (!isDeleteBtn && !isImage) {
+        if (!isDeleteBtn && !isArchiveBtn && !isImage) {
             e.preventDefault();
             openEditNoteEditor(noteId, e);
         }
     }
     
-    function applyTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
+    function toggleArchiveNote(noteId, e) {
+        const noteIndex = notes.findIndex(n => n.id === noteId);
+        if (noteIndex !== -1) {
+            notes[noteIndex].archived = !notes[noteIndex].archived;
+            saveNotes();
+            renderNotes(currentFilter === 'all' ? 
+                notes.filter(n => !n.archived) : 
+                notes.filter(n => n.archived));
+            
+            showToast(notes[noteIndex].archived ? 'Note archived' : 'Note unarchived');
+        }
     }
     
     function showToast(message) {
