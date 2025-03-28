@@ -16,7 +16,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const saveEditNoteBtn = document.getElementById('saveEditNoteBtn');
     const cancelEditNoteBtn = document.getElementById('cancelEditNoteBtn');
     const toast = document.getElementById('toast');
-    const themeOptions = document.querySelectorAll('.theme-option');
+    const themeToggleBtn = document.getElementById('themeToggleBtn');
+    const themeOptionsContainer = document.getElementById('themeOptionsContainer');
     
     // Image upload elements
     const imageUploadBtn = document.getElementById('imageUploadBtn');
@@ -40,6 +41,7 @@ document.addEventListener('DOMContentLoaded', function() {
     let currentSortMethod = 'newest';
     let voiceRecognition = null;
     let isRecording = false;
+    let isSaving = false; // Flag to prevent multiple saves
     
     // Initialize the app
     initApp();
@@ -54,102 +56,246 @@ document.addEventListener('DOMContentLoaded', function() {
     function setupEventListeners() {
         // Add new note button
         addNoteBtn.addEventListener('click', openNewNoteEditor);
+        addNoteBtn.addEventListener('touchend', handleTouchEvent(openNewNoteEditor));
         
-        // Save new note
-        saveNoteBtn.addEventListener('click', saveNewNote);
+        // Save buttons with enhanced mobile handling
+        saveNoteBtn.addEventListener('click', handleSaveNote);
+        saveNoteBtn.addEventListener('touchend', handleTouchEvent(handleSaveNote));
         
-        // Cancel new note
+        saveEditNoteBtn.addEventListener('click', handleSaveEditNote);
+        saveEditNoteBtn.addEventListener('touchend', handleTouchEvent(handleSaveEditNote));
+        
+        // Cancel buttons
         cancelNoteBtn.addEventListener('click', closeNewNoteEditor);
+        cancelNoteBtn.addEventListener('touchend', handleTouchEvent(closeNewNoteEditor));
         
-        // Save edited note
-        saveEditNoteBtn.addEventListener('click', saveEditedNote);
-        
-        // Cancel edited note
         cancelEditNoteBtn.addEventListener('click', closeEditNoteEditor);
+        cancelEditNoteBtn.addEventListener('touchend', handleTouchEvent(closeEditNoteEditor));
         
         // Image upload for new note
         imageUploadBtn.addEventListener('click', () => imageInput.click());
+        imageUploadBtn.addEventListener('touchend', handleTouchEvent(() => imageInput.click()));
         imageInput.addEventListener('change', handleImageUpload);
         removeImageBtn.addEventListener('click', removeImage);
+        removeImageBtn.addEventListener('touchend', handleTouchEvent(removeImage));
         
         // Image upload for edit note
         editImageUploadBtn.addEventListener('click', () => editImageInput.click());
+        editImageUploadBtn.addEventListener('touchend', handleTouchEvent(() => editImageInput.click()));
         editImageInput.addEventListener('change', handleEditImageUpload);
         removeEditImageBtn.addEventListener('click', removeEditImage);
+        removeEditImageBtn.addEventListener('touchend', handleTouchEvent(removeEditImage));
         
-        // Voice note
+        // Voice note functionality
         voiceNoteBtn.addEventListener('click', toggleVoiceRecording);
+        voiceNoteBtn.addEventListener('touchend', handleTouchEvent(toggleVoiceRecording));
         
         // Search functionality
         searchInput.addEventListener('input', searchNotes);
         clearSearchBtn.addEventListener('click', clearSearch);
+        clearSearchBtn.addEventListener('touchend', handleTouchEvent(clearSearch));
         
         // Sort functionality
         sortBtn.addEventListener('click', toggleSortMethod);
+        sortBtn.addEventListener('touchend', handleTouchEvent(toggleSortMethod));
         
-        // Theme selection
-        themeOptions.forEach(option => {
-            option.addEventListener('click', () => {
-                const theme = option.getAttribute('data-theme');
-                applyTheme(theme);
-                localStorage.setItem('theme', theme);
-            });
-        });
+        // Theme toggle
+        themeToggleBtn.addEventListener('click', toggleThemeOptions);
+        themeToggleBtn.addEventListener('touchend', handleTouchEvent(toggleThemeOptions));
         
         // Format buttons
         document.querySelectorAll('.format-btn').forEach(button => {
-            button.addEventListener('click', function() {
-                const command = this.getAttribute('data-command');
-                const value = this.getAttribute('data-value');
-                document.execCommand(command, false, value || null);
-                const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
-                activeEditor.focus();
-            });
-        });
-        
-        // Close editors when clicking outside
-        document.addEventListener('click', (e) => {
-            if (newNoteContainer.classList.contains('active') && 
-                !newNoteContainer.contains(e.target) && 
-                e.target !== addNoteBtn) {
-                closeNewNoteEditor();
-            }
-            
-            if (editNoteContainer.classList.contains('active') && 
-                !editNoteContainer.contains(e.target)) {
-                closeEditNoteEditor();
-            }
+            button.addEventListener('click', handleFormatButton);
+            button.addEventListener('touchend', handleTouchEvent(handleFormatButton));
         });
     }
     
-    function openNewNoteEditor() {
+    // Special touch event handler for mobile devices
+    function handleTouchEvent(handler) {
+        return function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            handler(e);
+        };
+    }
+    
+    function toggleThemeOptions(e) {
+        if (e) e.preventDefault();
+        themeOptionsContainer.classList.toggle('show');
+    }
+    
+    function handleFormatButton(e) {
+        if (e) e.preventDefault();
+        const command = this.getAttribute('data-command');
+        const value = this.getAttribute('data-value');
+        document.execCommand(command, false, value || null);
+        const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
+        activeEditor.focus();
+    }
+    
+    function handleSaveNote(e) {
+        if (e) e.preventDefault();
+        if (isSaving) return;
+        isSaving = true;
+        
+        try {
+            saveNewNote();
+        } catch (error) {
+            console.error('Save error:', error);
+            showToast('Error saving note');
+        } finally {
+            setTimeout(() => {
+                isSaving = false;
+            }, 1000);
+        }
+    }
+    
+    function handleSaveEditNote(e) {
+        if (e) e.preventDefault();
+        if (isSaving) return;
+        isSaving = true;
+        
+        try {
+            saveEditedNote();
+        } catch (error) {
+            console.error('Save error:', error);
+            showToast('Error saving changes');
+        } finally {
+            setTimeout(() => {
+                isSaving = false;
+            }, 1000);
+        }
+    }
+    
+    function setupVoiceRecognition() {
+        try {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (SpeechRecognition) {
+                voiceRecognition = new SpeechRecognition();
+                voiceRecognition.continuous = true;
+                voiceRecognition.interimResults = true;
+                voiceRecognition.lang = 'en-US';
+                
+                voiceRecognition.onresult = function(event) {
+                    const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
+                    let transcript = '';
+                    
+                    for (let i = event.resultIndex; i < event.results.length; i++) {
+                        if (event.results[i].isFinal) {
+                            transcript += event.results[i][0].transcript;
+                        }
+                    }
+                    
+                    if (transcript) {
+                        const currentContent = activeEditor.innerHTML;
+                        activeEditor.innerHTML = currentContent + (currentContent ? ' ' : '') + transcript;
+                    }
+                };
+                
+                voiceRecognition.onerror = function(event) {
+                    console.error('Speech recognition error', event.error);
+                    showToast('Voice recognition error: ' + event.error);
+                    stopVoiceRecording();
+                };
+            } else {
+                voiceNoteBtn.style.display = 'none';
+                console.warn('Speech recognition not supported in this browser');
+            }
+        } catch (e) {
+            console.error('Speech recognition initialization error', e);
+            voiceNoteBtn.style.display = 'none';
+        }
+    }
+    
+    function toggleVoiceRecording(e) {
+        if (e) e.preventDefault();
+        if (!voiceRecognition) {
+            showToast('Voice recognition not supported in your browser');
+            return;
+        }
+        
+        if (isRecording) {
+            stopVoiceRecording();
+        } else {
+            startVoiceRecording();
+        }
+    }
+    
+    function startVoiceRecording() {
+        try {
+            voiceRecognition.start();
+            isRecording = true;
+            voiceNoteBtn.innerHTML = '<i class="fas fa-microphone-slash"></i> Stop Recording';
+            voiceNoteBtn.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
+            
+            // Add recording indicator
+            const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
+            const recordingIndicator = document.createElement('div');
+            recordingIndicator.className = 'voice-recording';
+            recordingIndicator.innerHTML = `
+                <div class="recording-dot"></div>
+                <span>Recording...</span>
+            `;
+            activeEditor.parentNode.insertBefore(recordingIndicator, activeEditor.nextSibling);
+            
+            showToast('Voice recording started');
+        } catch (e) {
+            console.error('Error starting voice recognition', e);
+            showToast('Error starting voice recording');
+        }
+    }
+    
+    function stopVoiceRecording() {
+        if (voiceRecognition && isRecording) {
+            voiceRecognition.stop();
+            isRecording = false;
+            voiceNoteBtn.innerHTML = '<i class="fas fa-microphone"></i> Voice Note';
+            voiceNoteBtn.style.backgroundColor = '';
+            
+            // Remove recording indicator
+            const recordingIndicator = document.querySelector('.voice-recording');
+            if (recordingIndicator) recordingIndicator.remove();
+            
+            showToast('Voice recording stopped');
+        }
+    }
+    
+    function openNewNoteEditor(e) {
+        if (e) e.preventDefault();
         closeEditNoteEditor();
         newNoteContainer.classList.add('active');
         createOverlay();
         newNoteTitle.value = '';
-        newNoteContent.innerHTML = '';
+        newNoteContent.innerHTML = '<p></p>';
         currentImageDataUrl = null;
         imagePreview.style.display = 'none';
         removeImageBtn.style.display = 'none';
         imagePreview.src = '';
         imageInput.value = '';
-        newNoteTitle.focus();
+        
+        // Improved mobile focus handling
+        setTimeout(() => {
+            newNoteTitle.focus();
+            window.scrollTo(0, 0);
+        }, 100);
     }
     
-    function closeNewNoteEditor() {
+    function closeNewNoteEditor(e) {
+        if (e) e.preventDefault();
         newNoteContainer.classList.remove('active');
         removeOverlay();
         currentImageDataUrl = null;
         imageInput.value = '';
     }
     
-    function openEditNoteEditor(noteId) {
+    function openEditNoteEditor(noteId, e) {
+        if (e) e.preventDefault();
         const note = notes.find(n => n.id === noteId);
         if (!note) return;
         
         currentlyEditingId = noteId;
         editNoteTitle.value = note.title;
-        editNoteContent.innerHTML = note.content;
+        editNoteContent.innerHTML = note.content || '<p></p>';
         
         // Handle image in edit mode
         currentEditImageDataUrl = note.image || null;
@@ -169,10 +315,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Show edit container
         editNoteContainer.classList.add('active');
         createOverlay();
-        editNoteTitle.focus();
+        
+        // Improved mobile focus handling
+        setTimeout(() => {
+            editNoteTitle.focus();
+            window.scrollTo(0, 0);
+        }, 100);
     }
     
-    function closeEditNoteEditor() {
+    function closeEditNoteEditor(e) {
+        if (e) e.preventDefault();
         editNoteContainer.classList.remove('active');
         removeOverlay();
         currentlyEditingId = null;
@@ -183,7 +335,13 @@ document.addEventListener('DOMContentLoaded', function() {
     function createOverlay() {
         const overlay = document.createElement('div');
         overlay.className = 'overlay active';
-        overlay.addEventListener('click', () => {
+        overlay.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeNewNoteEditor();
+            closeEditNoteEditor();
+        });
+        overlay.addEventListener('touchend', (e) => {
+            e.preventDefault();
             closeNewNoteEditor();
             closeEditNoteEditor();
         });
@@ -223,14 +381,16 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function removeImage() {
+    function removeImage(e) {
+        if (e) e.preventDefault();
         currentImageDataUrl = null;
         imagePreview.style.display = 'none';
         removeImageBtn.style.display = 'none';
         imageInput.value = '';
     }
     
-    function removeEditImage() {
+    function removeEditImage(e) {
+        if (e) e.preventDefault();
         currentEditImageDataUrl = null;
         editImagePreview.style.display = 'none';
         removeEditImageBtn.style.display = 'none';
@@ -282,22 +442,25 @@ document.addEventListener('DOMContentLoaded', function() {
         closeEditNoteEditor();
     }
     
-    function deleteNote(noteId) {
-        notes = notes.filter(note => note.id !== noteId);
-        saveNotes();
-        
-        const noteElement = document.querySelector(`.note[data-id="${noteId}"]`);
-        if (noteElement) {
-            noteElement.classList.add('deleting');
-            setTimeout(() => {
-                renderNotes(notes);
-                showToast('Note deleted');
-            }, 300);
-        }
-        
-        // If deleting the note being edited, hide the edit container
-        if (currentlyEditingId === noteId) {
-            closeEditNoteEditor();
+    function deleteNote(noteId, e) {
+        if (e) e.preventDefault();
+        if (confirm('Are you sure you want to delete this note?')) {
+            notes = notes.filter(note => note.id !== noteId);
+            saveNotes();
+            
+            const noteElement = document.querySelector(`.note[data-id="${noteId}"]`);
+            if (noteElement) {
+                noteElement.classList.add('deleting');
+                setTimeout(() => {
+                    renderNotes(notes);
+                    showToast('Note deleted');
+                }, 300);
+            }
+            
+            // If deleting the note being edited, hide the edit container
+            if (currentlyEditingId === noteId) {
+                closeEditNoteEditor();
+            }
         }
     }
     
@@ -313,19 +476,21 @@ document.addEventListener('DOMContentLoaded', function() {
         
         const filteredNotes = notes.filter(note => 
             note.title.toLowerCase().includes(searchTerm) || 
-            note.content.toLowerCase().includes(searchTerm)
+            (note.content && note.content.toLowerCase().includes(searchTerm))
         );
         
         renderNotes(filteredNotes);
     }
     
-    function clearSearch() {
+    function clearSearch(e) {
+        if (e) e.preventDefault();
         searchInput.value = '';
         clearSearchBtn.style.display = 'none';
         renderNotes(notes);
     }
     
-    function toggleSortMethod() {
+    function toggleSortMethod(e) {
+        if (e) e.preventDefault();
         currentSortMethod = currentSortMethod === 'newest' ? 'oldest' : 'newest';
         sortBtn.innerHTML = `<i class="fas fa-sort"></i> ${currentSortMethod === 'newest' ? 'Newest First' : 'Oldest First'}`;
         sortNotes();
@@ -374,7 +539,9 @@ document.addEventListener('DOMContentLoaded', function() {
             });
             
             // Truncate content for preview (remove HTML tags)
-            const contentPreview = note.content.replace(/<[^>]*>/g, '').substring(0, 200);
+            const contentPreview = note.content 
+                ? note.content.replace(/<[^>]*>/g, ' ').substring(0, 200) 
+                : '';
             
             noteElement.innerHTML = `
                 <div class="note-title">${note.title}</div>
@@ -386,160 +553,39 @@ document.addEventListener('DOMContentLoaded', function() {
             
             notesList.appendChild(noteElement);
             
-            // Add click event to edit note
+            // Add click event to edit note - improved for mobile
             noteElement.addEventListener('click', function(e) {
-                if (!e.target.classList.contains('delete-note') && 
-                    !e.target.classList.contains('fa-trash') &&
-                    !e.target.classList.contains('note-image')) {
-                    openEditNoteEditor(note.id);
-                }
+                handleNoteClick(e, note.id);
+            });
+            noteElement.addEventListener('touchend', function(e) {
+                handleNoteClick(e, note.id);
             });
             
             // Add delete button event
             const deleteBtn = noteElement.querySelector('.delete-note');
             deleteBtn.addEventListener('click', function(e) {
+                e.preventDefault();
                 e.stopPropagation();
-                if (confirm('Are you sure you want to delete this note?')) {
-                    deleteNote(note.id);
-                }
+                deleteNote(note.id, e);
             });
-            
-            // Add swipe to delete functionality
-            setupSwipeToDelete(noteElement, note.id);
+            deleteBtn.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteNote(note.id, e);
+            });
         });
     }
     
-    function setupSwipeToDelete(element, noteId) {
-        let touchStartX = 0;
-        let touchEndX = 0;
-        let isSwiping = false;
+    function handleNoteClick(e, noteId) {
+        // Only open editor if clicking on the note content, not delete button or image
+        const isDeleteBtn = e.target.classList.contains('delete-note') || 
+                          e.target.classList.contains('fa-trash') ||
+                          e.target.closest('.delete-note');
+        const isImage = e.target.classList.contains('note-image');
         
-        element.addEventListener('touchstart', function(e) {
-            touchStartX = e.changedTouches[0].screenX;
-            element.classList.add('swiping');
-        }, {passive: true});
-        
-        element.addEventListener('touchmove', function(e) {
-            touchEndX = e.changedTouches[0].screenX;
-            const diff = touchEndX - touchStartX;
-            
-            if (diff < 0 && Math.abs(diff) > 10) {
-                isSwiping = true;
-                element.style.transform = `translateX(${diff}px)`;
-            }
-        }, {passive: true});
-        
-        element.addEventListener('touchend', function() {
-            element.classList.remove('swiping');
-            
-            if (isSwiping) {
-                const diff = touchEndX - touchStartX;
-                
-                if (diff < -100) { // Swiped left enough to delete
-                    if (confirm('Delete this note?')) {
-                        deleteNote(noteId);
-                    } else {
-                        element.style.transform = '';
-                    }
-                } else {
-                    element.style.transform = '';
-                }
-            }
-            
-            isSwiping = false;
-            touchStartX = 0;
-            touchEndX = 0;
-        }, {passive: true});
-    }
-    
-    function setupVoiceRecognition() {
-        try {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (SpeechRecognition) {
-                voiceRecognition = new SpeechRecognition();
-                voiceRecognition.continuous = true;
-                voiceRecognition.interimResults = true;
-                voiceRecognition.lang = 'en-US';
-                
-                voiceRecognition.onresult = function(event) {
-                    const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
-                    let transcript = '';
-                    
-                    for (let i = event.resultIndex; i < event.results.length; i++) {
-                        if (event.results[i].isFinal) {
-                            transcript += event.results[i][0].transcript;
-                        }
-                    }
-                    
-                    if (transcript) {
-                        const currentContent = activeEditor.innerHTML;
-                        activeEditor.innerHTML = currentContent + (currentContent ? ' ' : '') + transcript;
-                    }
-                };
-                
-                voiceRecognition.onerror = function(event) {
-                    console.error('Speech recognition error', event.error);
-                    showToast('Voice recognition error: ' + event.error);
-                    stopVoiceRecording();
-                };
-            } else {
-                voiceNoteBtn.style.display = 'none';
-            }
-        } catch (e) {
-            console.error('Speech recognition not supported', e);
-            voiceNoteBtn.style.display = 'none';
-        }
-    }
-    
-    function toggleVoiceRecording() {
-        if (!voiceRecognition) {
-            showToast('Voice recognition not supported in your browser');
-            return;
-        }
-        
-        if (isRecording) {
-            stopVoiceRecording();
-        } else {
-            startVoiceRecording();
-        }
-    }
-    
-    function startVoiceRecording() {
-        try {
-            voiceRecognition.start();
-            isRecording = true;
-            voiceNoteBtn.innerHTML = '<i class="fas fa-microphone-slash"></i> Stop Recording';
-            voiceNoteBtn.style.backgroundColor = 'rgba(255, 0, 0, 0.2)';
-            
-            // Add recording indicator
-            const activeEditor = newNoteContainer.classList.contains('active') ? newNoteContent : editNoteContent;
-            const recordingIndicator = document.createElement('div');
-            recordingIndicator.className = 'voice-recording';
-            recordingIndicator.innerHTML = `
-                <div class="recording-dot"></div>
-                <span>Recording...</span>
-            `;
-            activeEditor.parentNode.insertBefore(recordingIndicator, activeEditor.nextSibling);
-            
-            showToast('Voice recording started');
-        } catch (e) {
-            console.error('Error starting voice recognition', e);
-            showToast('Error starting voice recording');
-        }
-    }
-    
-    function stopVoiceRecording() {
-        if (voiceRecognition && isRecording) {
-            voiceRecognition.stop();
-            isRecording = false;
-            voiceNoteBtn.innerHTML = '<i class="fas fa-microphone"></i> Voice Note';
-            voiceNoteBtn.style.backgroundColor = '';
-            
-            // Remove recording indicator
-            const recordingIndicator = document.querySelector('.voice-recording');
-            if (recordingIndicator) recordingIndicator.remove();
-            
-            showToast('Voice recording stopped');
+        if (!isDeleteBtn && !isImage) {
+            e.preventDefault();
+            openEditNoteEditor(noteId, e);
         }
     }
     
