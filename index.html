@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rajeev's Notes App</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <div class="theme-selector">
+            <div class="theme-option" data-theme="light"></div>
+            <div class="theme-option" data-theme="dark"></div>
+            <div class="theme-option" data-theme="blue"></div>
+            <div class="theme-option" data-theme="green"></div>
+            <div class="theme-option" data-theme="purple"></div>
+        </div>
+        
+        <div class="header">
+            <div class="app-title">Rajeev's Notes</div>
+            <div class="header-controls">
+                <div class="search-container">
+                    <i class="fas fa-search search-icon"></i>
+                    <input type="text" class="search-input" placeholder="Search notes...">
+                    <button class="clear-search-btn" id="clearSearchBtn"><i class="fas fa-times"></i></button>
+                </div>
+                <button class="sort-btn" id="sortBtn">
+                    <i class="fas fa-sort"></i> Sort
+                </button>
+            </div>
+        </div>
+        
+        <div class="main-content">
+            <div class="notes-list" id="notesList">
+                <!-- New note editor container -->
+                <div class="note-editor-container" id="newNoteContainer">
+                    <div class="editor-toolbar">
+                        <button class="format-btn" data-command="bold"><i class="fas fa-bold"></i></button>
+                        <button class="format-btn" data-command="italic"><i class="fas fa-italic"></i></button>
+                        <button class="format-btn" data-command="underline"><i class="fas fa-underline"></i></button>
+                        <button class="format-btn" data-command="insertUnorderedList"><i class="fas fa-list-ul"></i></button>
+                        <button class="format-btn" data-command="insertOrderedList"><i class="fas fa-list-ol"></i></button>
+                        <button class="format-btn" data-command="createLink"><i class="fas fa-link"></i></button>
+                        <button class="format-btn" data-command="hiliteColor" data-value="#ffff00"><i class="fas fa-highlighter"></i></button>
+                        <button class="format-btn" data-command="foreColor" data-value="#333333"><i class="fas fa-font"></i></button>
+                        <button class="format-btn" data-command="justifyLeft"><i class="fas fa-align-left"></i></button>
+                        <button class="format-btn" data-command="justifyCenter"><i class="fas fa-align-center"></i></button>
+                        <button class="format-btn" data-command="justifyRight"><i class="fas fa-align-right"></i></button>
+                    </div>
+                    <input type="text" class="note-title-input" id="newNoteTitle" placeholder="Note title">
+                    <div class="note-content-editor" id="newNoteContent" contenteditable="true" placeholder="Start typing your note here..."></div>
+                    <div class="editor-actions">
+                        <div class="attachment-options">
+                            <button class="image-upload-btn" id="imageUploadBtn">
+                                <i class="fas fa-image"></i> Add Image
+                            </button>
+                            <input type="file" id="imageInput" accept="image/*" style="display: none;">
+                            <button class="voice-note-btn" id="voiceNoteBtn">
+                                <i class="fas fa-microphone"></i> Voice Note
+                            </button>
+                        </div>
+                        <div class="editor-buttons">
+                            <button class="cancel-note-btn" id="cancelNoteBtn">Cancel</button>
+                            <button class="save-note-btn" id="saveNoteBtn">Save Note</button>
+                        </div>
+                    </div>
+                    <div class="image-preview-container">
+                        <img id="imagePreview" class="image-preview">
+                        <button id="removeImageBtn" class="remove-image-btn"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+                
+                <!-- Edit note container (hidden by default) -->
+                <div class="note-editor-container" id="editNoteContainer">
+                    <div class="editor-toolbar">
+                        <button class="format-btn" data-command="bold"><i class="fas fa-bold"></i></button>
+                        <button class="format-btn" data-command="italic"><i class="fas fa-italic"></i></button>
+                        <button class="format-btn" data-command="underline"><i class="fas fa-underline"></i></button>
+                        <button class="format-btn" data-command="insertUnorderedList"><i class="fas fa-list-ul"></i></button>
+                        <button class="format-btn" data-command="insertOrderedList"><i class="fas fa-list-ol"></i></button>
+                        <button class="format-btn" data-command="createLink"><i class="fas fa-link"></i></button>
+                        <button class="format-btn" data-command="hiliteColor" data-value="#ffff00"><i class="fas fa-highlighter"></i></button>
+                        <button class="format-btn" data-command="foreColor" data-value="#333333"><i class="fas fa-font"></i></button>
+                        <button class="format-btn" data-command="justifyLeft"><i class="fas fa-align-left"></i></button>
+                        <button class="format-btn" data-command="justifyCenter"><i class="fas fa-align-center"></i></button>
+                        <button class="format-btn" data-command="justifyRight"><i class="fas fa-align-right"></i></button>
+                    </div>
+                    <input type="text" class="note-title-input" id="editNoteTitle" placeholder="Note title">
+                    <div class="note-content-editor" id="editNoteContent" contenteditable="true" placeholder="Start typing your note here..."></div>
+                    <div class="editor-actions">
+                        <div class="attachment-options">
+                            <button class="image-upload-btn" id="editImageUploadBtn">
+                                <i class="fas fa-image"></i> Change Image
+                            </button>
+                            <input type="file" id="editImageInput" accept="image/*" style="display: none;">
+                        </div>
+                        <div class="editor-buttons">
+                            <button class="cancel-note-btn" id="cancelEditNoteBtn">Cancel</button>
+                            <button class="save-note-btn" id="saveEditNoteBtn">Save Changes</button>
+                        </div>
+                    </div>
+                    <div class="image-preview-container">
+                        <img id="editImagePreview" class="image-preview">
+                        <button id="removeEditImageBtn" class="remove-image-btn"><i class="fas fa-trash"></i></button>
+                    </div>
+                </div>
+                
+                <!-- Existing notes will be added here dynamically -->
+            </div>
+        </div>
+    </div>
+    
+    <button class="add-note-btn" id="addNoteBtn">
+        <i class="fas fa-plus"></i>
+    </button>
+    
+    <div class="toast" id="toast"></div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
